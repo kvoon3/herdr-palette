@@ -19,18 +19,20 @@ const items = [
   item("settings", "Settings", { kind: "shortcut" }),
 ];
 
-async function palette(result: CommandResult) {
+async function palette(result: CommandResult, paletteItems = items) {
   const harness = await createTestRenderer({ width: 60, height: 14 });
   const ran: Array<{ id: string; input?: string } | "closed"> = [];
-  mountPalette(harness.renderer, items, {
+  const recorded: string[] = [];
+  mountPalette(harness.renderer, paletteItems, {
     theme,
     run: async (selected, input) => {
       ran.push(input === undefined ? { id: selected.id } : { id: selected.id, input });
       return result;
     },
+    record: id => recorded.push(id),
     close: () => ran.push("closed"),
   });
-  return { ...harness, ran };
+  return { ...harness, ran, recorded };
 }
 
 const hex = (color: { r: number; g: number; b: number }) =>
@@ -160,4 +162,49 @@ test("explains an empty result set", async () => {
   await renderOnce();
 
   expect(captureCharFrame()).toContain("No commands match your search.");
+});
+
+const pinned = [
+  { ...item("zoom", "Zoom pane", { kind: "herdr", argv: [] }), category: "Recent" as const },
+  ...items,
+];
+
+const occurrences = (frame: string, needle: string) => frame.split(needle).length - 1;
+
+test("pins recently used commands above their own category", async () => {
+  const { renderOnce, captureCharFrame } = await palette({ ok: true, message: "" }, pinned);
+
+  await renderOnce();
+
+  const frame = captureCharFrame();
+  expect(frame).toContain("Recent");
+  expect(occurrences(frame, "Zoom pane")).toBe(2);
+  expect(frame.indexOf("Recent")).toBeLessThan(frame.indexOf("Zoom pane"));
+});
+
+test("counts commands once and drops the pinned copy while searching", async () => {
+  const { mockInput, renderOnce, captureCharFrame } = await palette({ ok: true, message: "" }, pinned);
+
+  await mockInput.typeText("zoom");
+  await renderOnce();
+
+  const frame = captureCharFrame();
+  expect(occurrences(frame, "Zoom pane")).toBe(1);
+  expect(frame).toContain("1 commands");
+});
+
+test("remembers a command that ran and forgets one that did not", async () => {
+  const succeeded = await palette({ ok: true, message: "" });
+  await succeeded.mockInput.typeText("zoom");
+  succeeded.mockInput.pressEnter();
+  await settle();
+
+  expect(succeeded.recorded).toEqual(["zoom"]);
+
+  const failed = await palette({ ok: false, message: "Herdr said no." });
+  await failed.mockInput.typeText("zoom");
+  failed.mockInput.pressEnter();
+  await settle();
+
+  expect(failed.recorded).toEqual([]);
 });

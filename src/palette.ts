@@ -1,9 +1,10 @@
 import { BoxRenderable, InputRenderable, InputRenderableEvents, TextRenderable, type CliRenderer } from "@opentui/core";
 import type { CommandResult, PaletteItem } from "./types";
+import { RECENT_CATEGORY } from "./recent";
 import { fallbackTheme, type PaletteTheme } from "./theme";
 import { viewport } from "./viewport";
 
-export interface PaletteDeps { /** Herdr's live palette; omit for the built-in catppuccin fallback. */ theme?: PaletteTheme; run: (item: PaletteItem, input?: string) => Promise<CommandResult>; close: () => void }
+export interface PaletteDeps { /** Herdr's live palette; omit for the built-in catppuccin fallback. */ theme?: PaletteTheme; run: (item: PaletteItem, input?: string) => Promise<CommandResult>; close: () => void; /** Called with the id of a command that ran successfully. */ record?: (id: string) => void }
 
 /** Rows the chrome always owns: heading, input, the blank line below it, the footer bar. */
 const CHROME_ROWS = 4;
@@ -19,7 +20,10 @@ export function mountPalette(renderer: CliRenderer, allItems: PaletteItem[], dep
     const haystack = [item.title, item.description, ...item.aliases, ...item.shortcuts].join(" ").toLowerCase();
     return query.toLowerCase().split(/\s+/).every(token => haystack.includes(token));
   };
-  const visibleItems = () => allItems.filter(matches);
+  // The pinned Recent copies are a view of commands already listed below them, so a search drops
+  // them rather than showing the same command twice.
+  const visibleItems = () => allItems.filter(item => matches(item) && (!query || item.category !== RECENT_CATEGORY));
+  const catalogCount = (items: PaletteItem[]) => items.filter(item => item.category !== RECENT_CATEGORY).length;
   const prompting = () => promptItem !== undefined;
 
   function redraw() {
@@ -72,7 +76,7 @@ export function mountPalette(renderer: CliRenderer, allItems: PaletteItem[], dep
       });
     }
     if (status) body.add(new TextRenderable(renderer, { id: "status", content: status.replace(/\s+/g, " ").slice(0, Math.max(20, renderer.width - 4)), fg: theme.accent }));
-    panel.add(footerBar(prompting() ? 0 : items.length));
+    panel.add(footerBar(prompting() ? 0 : catalogCount(items)));
     renderer.root.add(panel);
   }
 
@@ -102,7 +106,8 @@ export function mountPalette(renderer: CliRenderer, allItems: PaletteItem[], dep
     running = true;
     try {
       const result = await deps.run(item, input);
-      if (result.ok) return deps.close();
+      // Recorded before close() tears the renderer down, and only for commands that actually ran.
+      if (result.ok) { deps.record?.(item.id); return deps.close(); }
       status = result.message;
     } catch (error) {
       status = error instanceof Error ? error.message : String(error);

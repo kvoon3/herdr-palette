@@ -1,4 +1,4 @@
-export type Category = "Workspace" | "Tabs" | "Panes" | "Worktrees" | "Agents" | "Herdr" | "Custom";
+export type Category = "Recent" | "Workspace" | "Tabs" | "Panes" | "Worktrees" | "Agents" | "Herdr" | "Custom";
 
 export type ResolveAction =
   | "close-pane"

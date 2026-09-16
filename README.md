@@ -54,6 +54,18 @@ make release
 
 Use `make release LEVEL=patch` or `LEVEL=major` for a different bump.
 
+### Recently used
+
+The top of the empty palette pins the last five commands that ran successfully,
+most recent first, so `prefix+space` then `enter` repeats what you just did.
+They are copies: the command also stays in its own category, and a search hides
+the copies instead of matching them twice. Commands that only name a shortcut
+are not recorded, since selecting them runs nothing.
+
+The list is kept in `recent.palette.json` under Herdr's plugin state directory
+(`HERDR_PLUGIN_STATE_DIR`). It is a cache, not data: an unreadable file, an
+unknown id, or a failed write is silently ignored.
+
 ## Configuration and scope
 
 The palette reads Herdr's `config.toml`, including `[keys]` remaps, custom
@@ -61,7 +73,7 @@ The palette reads Herdr's `config.toml`, including `[keys]` remaps, custom
 shortcuts and paints itself with your effective theme. Bindings keep the word
 `prefix` instead of expanding it to the concrete leader key
 (e.g. `prefix+z`, not `ctrl+a+z`). It owns no configuration or durable state
-and never writes to your Herdr config.
+beyond the recent-command cache, and never writes to your Herdr config.
 
 ### Theme
 
